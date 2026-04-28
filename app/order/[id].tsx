@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
   STATUS_LABELS,
   STATUS_ICONS,
 } from '../../services/orderActions';
+import { startLiveTracking, stopLiveTracking } from '../../services/locationService';
 
 const STATUS_COLORS: Record<string, string> = {
   placed: '#F59E0B',
@@ -40,34 +41,14 @@ function StatusStepper({ current }: { current: string }) {
         return (
           <View key={step} style={styles.stepRow}>
             <View style={styles.stepLeft}>
-              <View
-                style={[
-                  styles.stepDot,
-                  done && styles.stepDotDone,
-                  isActive && styles.stepDotActive,
-                ]}
-              >
-                {done && (
-                  <Ionicons
-                    name={isActive ? 'ellipse' : 'checkmark'}
-                    size={12}
-                    color="#fff"
-                  />
-                )}
+              <View style={[styles.stepDot, done && styles.stepDotDone, isActive && styles.stepDotActive]}>
+                {done && <Ionicons name={isActive ? 'ellipse' : 'checkmark'} size={12} color="#fff" />}
               </View>
               {idx < STEPS.length - 1 && (
-                <View
-                  style={[styles.stepLine, idx < currentIdx && styles.stepLineDone]}
-                />
+                <View style={[styles.stepLine, idx < currentIdx && styles.stepLineDone]} />
               )}
             </View>
-            <Text
-              style={[
-                styles.stepLabel,
-                isActive && styles.stepLabelActive,
-                idx < currentIdx && styles.stepLabelDone,
-              ]}
-            >
+            <Text style={[styles.stepLabel, isActive && styles.stepLabelActive, idx < currentIdx && styles.stepLabelDone]}>
               {step.replace(/_/g, ' ')}
             </Text>
           </View>
@@ -82,6 +63,28 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const order = useRiderOrderStore((s) => (id ? s.getOrder(id) : undefined));
   const [loading, setLoading] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
+
+  // Auto-start GPS when rider is out for delivery, auto-stop on deliver
+  useEffect(() => {
+    if (!order) return;
+
+    if (order.status === 'out_for_delivery' && !isTracking) {
+      startLiveTracking(order.id).then((granted) => {
+        if (granted) setIsTracking(true);
+      });
+    }
+
+    if ((order.status === 'delivered' || order.status === 'cancelled') && isTracking) {
+      stopLiveTracking();
+      setIsTracking(false);
+    }
+  }, [order?.status]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => stopLiveTracking();
+  }, []);
 
   if (!order) {
     return (
@@ -114,6 +117,8 @@ export default function OrderDetailScreen() {
             try {
               await updateOrderStatus(order.id, nextStatus);
               if (nextStatus === 'delivered') {
+                stopLiveTracking();
+                setIsTracking(false);
                 Alert.alert('🎉 Delivered!', 'Order marked as delivered.', [
                   { text: 'Back to Orders', onPress: () => router.back() },
                 ]);
@@ -146,6 +151,14 @@ export default function OrderDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
+        {/* Live GPS indicator */}
+        {isTracking && (
+          <View style={styles.gpsBar}>
+            <View style={styles.gpsDot} />
+            <Text style={styles.gpsText}>Live location sharing active — customer can see you on map</Text>
+          </View>
+        )}
+
         {/* Status Stepper */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Delivery Progress</Text>
@@ -170,9 +183,7 @@ export default function OrderDetailScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 {item.addons && item.addons.length > 0 && (
-                  <Text style={styles.addons}>
-                    + {item.addons.map((a) => a.name).join(', ')}
-                  </Text>
+                  <Text style={styles.addons}>+ {item.addons.map((a) => a.name).join(', ')}</Text>
                 )}
               </View>
               <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
@@ -194,9 +205,7 @@ export default function OrderDetailScreen() {
                 {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online — Already paid'}
               </Text>
               {order.paymentMethod === 'cod' && (
-                <Text style={styles.collectNote}>
-                  Collect ₹{order.total} from customer at doorstep.
-                </Text>
+                <Text style={styles.collectNote}>Collect ₹{order.total} from customer at doorstep.</Text>
               )}
             </View>
             <Text style={styles.totalBig}>
@@ -225,11 +234,7 @@ export default function OrderDetailScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons
-                  name={STATUS_ICONS[order.status] as any}
-                  size={20}
-                  color="#fff"
-                />
+                <Ionicons name={STATUS_ICONS[order.status] as any} size={20} color="#fff" />
                 <Text style={styles.actionBtnText}>{STATUS_LABELS[order.status]}</Text>
               </>
             )}
@@ -254,34 +259,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 8 },
   back: { fontSize: 14, color: '#0f766e', fontWeight: '600' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e5e7eb' },
   backBtn: { marginRight: 8 },
   headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#111827' },
-  headerBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
+  headerBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   headerBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  gpsBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dcfce7', borderRadius: 12, padding: 10, marginBottom: 12, gap: 8 },
+  gpsDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#16a34a' },
+  gpsText: { flex: 1, fontSize: 12, color: '#15803d', fontWeight: '600' },
   scroll: { padding: 16, paddingBottom: 32 },
-  section: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
-  },
+  section: { backgroundColor: '#ffffff', borderRadius: 16, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   stepperWrap: { gap: 0 },
   stepRow: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -305,30 +292,8 @@ const styles = StyleSheet.create({
   paymentText: { fontSize: 14, color: '#111827', fontWeight: '600' },
   collectNote: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   totalBig: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    paddingBottom: 24,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#0f766e',
-    borderRadius: 14,
-    paddingVertical: 14,
-  },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', padding: 16, paddingBottom: 24, borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#e5e7eb', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, elevation: 8 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#0f766e', borderRadius: 14, paddingVertical: 14 },
   actionBtnGreen: { backgroundColor: '#16a34a' },
   actionBtnDisabled: { opacity: 0.6 },
   actionBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
