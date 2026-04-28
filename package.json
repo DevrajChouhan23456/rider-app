@@ -1,0 +1,39 @@
+{
+  "name": "dal-bafla-rider-app",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~55.0.10",
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~55.0.17",
+    "expo-constants": "~55.0.15",
+    "expo-font": "~55.0.6",
+    "expo-linking": "~55.0.14",
+    "expo-router": "~55.0.13",
+    "expo-splash-screen": "~55.0.19",
+    "expo-status-bar": "~55.0.5",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-reanimated": "~3.16.0",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "^0.21.0",
+    "react-native-maps": "1.18.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.2.10",
+    "typescript": "^5.3.3"
+  }
+}
